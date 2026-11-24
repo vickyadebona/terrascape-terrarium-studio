@@ -1,12 +1,13 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { screen, fireEvent, within } from '@testing-library/react';
 import { renderSiteAt, signInAsTestUser } from '../test/test-utils';
+import { signInMockUser } from '../test/authClientMock';
 
 function renderStudio() {
   return renderSiteAt('/studio');
 }
 
-describe('Studio → Your Jar', () => {
+describe('Studio → Your Greenhouse', () => {
   beforeEach(() => {
     sessionStorage.clear();
   });
@@ -43,12 +44,12 @@ describe('Studio → Your Jar', () => {
 
     fireEvent.click(screen.getByRole('checkbox', { name: /Button Fern/ }));
     fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
-    // Details are optional: the design can go to the jar with none chosen.
-    expect(screen.getByRole('button', { name: /Add to Your Jar/ })).toBeEnabled();
+    // Details are optional: the design can go to the greenhouse with none chosen.
+    expect(screen.getByRole('button', { name: /Add to Greenhouse/ })).toBeEnabled();
     expect(screen.queryByText(/Choose at least one detail/)).not.toBeInTheDocument();
   });
 
-  it('adds a design with no details to the jar', async () => {
+  it('adds a design with no details to the greenhouse', async () => {
     signInAsTestUser();
     renderStudio();
     fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
@@ -56,9 +57,9 @@ describe('Studio → Your Jar', () => {
     fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /Button Fern/ }));
     fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
-    fireEvent.click(screen.getByRole('button', { name: /Add to Your Jar/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add to Greenhouse/ }));
 
-    const jar = await screen.findByRole('dialog', { name: /Your Jar/ });
+    const jar = await screen.findByRole('dialog', { name: /Your Greenhouse/ });
     // $84 jar + $22 foundation + $18 fern
     expect(within(jar).getByText('$124')).toBeInTheDocument();
     expect(within(jar).getByText('Pacific Forest Floor · 1 plant · 0 details')).toBeInTheDocument();
@@ -79,7 +80,7 @@ describe('Studio → Your Jar', () => {
     fireEvent.click(screen.getByRole('checkbox', { name: /Button Fern/ }));
     fireEvent.click(screen.getByRole('button', { name: /04\s*Details/ }));
     fireEvent.click(screen.getByRole('checkbox', { name: /River Stone/i }));
-    fireEvent.click(screen.getByRole('button', { name: /Add to Your Jar/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add to Greenhouse/ }));
   }
 
   function expectDesignInJar(jar: HTMLElement) {
@@ -90,14 +91,14 @@ describe('Studio → Your Jar', () => {
     expect(within(jar).getByRole('radio', { name: /Studio courier/ })).toBeChecked();
   }
 
-  it('lets guests design but asks them to sign in before adding to the jar', () => {
+  it('lets guests design but asks them to sign in before adding to the greenhouse', () => {
     renderStudio();
-    expect(screen.queryByRole('button', { name: /Your Jar/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Greenhouse/ })).not.toBeInTheDocument();
 
     designAndAdd();
 
-    expect(screen.getByRole('dialog', { name: 'Sign in to save it to your jar' })).toBeInTheDocument();
-    expect(screen.queryByRole('dialog', { name: /Your Jar/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog', { name: 'Sign in to save it to your greenhouse' })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /Your Greenhouse/ })).not.toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem('terrascape_cart_v2') ?? '[]')).toEqual([]);
   });
 
@@ -105,15 +106,15 @@ describe('Studio → Your Jar', () => {
     renderStudio();
     designAndAdd();
 
-    const signIn = screen.getByRole('dialog', { name: 'Sign in to save it to your jar' });
+    const signIn = screen.getByRole('dialog', { name: 'Sign in to save it to your greenhouse' });
     fireEvent.change(within(signIn).getByLabelText('Full Name'), { target: { value: 'New Collector' } });
     fireEvent.change(within(signIn).getByLabelText('Email Address'), { target: { value: 'new@example.test' } });
     fireEvent.change(within(signIn).getByLabelText('Password'), { target: { value: 'test-password-1' } });
-    fireEvent.click(within(signIn).getByRole('button', { name: /Create Account & Add to Your Jar/ }));
+    fireEvent.click(within(signIn).getByRole('button', { name: /Create Account & Add to Greenhouse/ }));
 
-    const jar = await screen.findByRole('dialog', { name: /Your Jar/ }, { timeout: 2000 });
+    const jar = await screen.findByRole('dialog', { name: /Your Greenhouse/ }, { timeout: 2000 });
     expectDesignInJar(jar);
-    expect(screen.getByRole('button', { name: /Your Jar\s*1/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^Greenhouse\s*1/ })).toBeInTheDocument();
     expect(JSON.parse(localStorage.getItem('terrascape_cart_v2') ?? '[]')).toHaveLength(1);
 
     // Shipping nationwide turns the build into a DIY kit and drops the assembly line.
@@ -122,13 +123,13 @@ describe('Studio → Your Jar', () => {
     expect(within(jar).getByText('Pacific Forest Floor · 1 plant · 1 detail')).toBeInTheDocument();
   });
 
-  it('adds straight to the jar for signed-in shoppers', async () => {
+  it('adds straight to the greenhouse for signed-in shoppers', async () => {
     signInAsTestUser();
     renderStudio();
     designAndAdd();
 
-    expect(screen.queryByRole('dialog', { name: 'Sign in to save it to your jar' })).not.toBeInTheDocument();
-    expectDesignInJar(await screen.findByRole('dialog', { name: /Your Jar/ }));
+    expect(screen.queryByRole('dialog', { name: 'Sign in to save it to your greenhouse' })).not.toBeInTheDocument();
+    expectDesignInJar(await screen.findByRole('dialog', { name: /Your Greenhouse/ }));
   });
 });
 
@@ -214,5 +215,112 @@ describe('Not-found page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Browse the collection/ }));
     expect(window.location.pathname).toBe('/collections');
+  });
+});
+
+describe('After an order goes through', () => {
+  it('empties the greenhouse and starts the Studio over', async () => {
+    signInAsTestUser();
+    renderSiteAt('/studio');
+
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    fireEvent.click(screen.getByRole('radio', { name: /Pacific Forest Floor/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: /Button Fern/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Continue/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Add to Greenhouse/ }));
+
+    const jar = await screen.findByRole('dialog', { name: /Your Greenhouse/ });
+    fireEvent.click(within(jar).getByText('Proceed to Stripe Checkout'));
+    const checkout = await screen.findByRole('dialog', { name: /Stripe Embedded Checkout/ });
+    fireEvent.click(within(checkout).getByRole('radio', { name: /Studio pickup/ }));
+    fireEvent.click(within(checkout).getByRole('button', { name: /Auto-fill Stripe 4242 Test Card/ }));
+    fireEvent.click(within(checkout).getByRole('button', { name: /Authorize & Pay/ }));
+
+    expect(await screen.findByRole('dialog', { name: /Workshop Assembly Tracker/ }, { timeout: 5000 })).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem('terrascape_cart_v2') ?? '[]')).toEqual([]);
+    expect(screen.getByRole('button', { name: /^Greenhouse\s*0/ })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: /Your Greenhouse/ })).not.toBeInTheDocument();
+
+    // The Studio is back to a fresh design: step 01 with only the smooth lid chosen.
+    expect(screen.getByRole('heading', { name: 'Choose your vessel.' })).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Smooth Lid/ })).toHaveAttribute('aria-checked', 'true');
+    expect(JSON.parse(sessionStorage.getItem('terrascape_builder_selected_v1') ?? '[]')).toEqual(['jar_smooth']);
+  }, 10000);
+});
+
+describe('Our Story closing panel', () => {
+  it('invites guests to create an account or log in', () => {
+    renderSiteAt('/our-story');
+
+    expect(screen.getByRole('heading', { name: /Save your worlds/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Create an account/ })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Already have one\? Log in/ })).toHaveAttribute('href', '/account?mode=login');
+  });
+
+  it('sends signed-in shoppers to the Studio instead', async () => {
+    signInAsTestUser();
+    renderSiteAt('/our-story');
+
+    expect(screen.queryByRole('button', { name: /Create an account/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Log in/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Design in the Studio/ }));
+    expect(await screen.findByRole('heading', { name: /Choose your vessel/ })).toBeInTheDocument();
+  });
+});
+
+describe('Account page', () => {
+  it('shows only name and email in the profile, without the removed rows', async () => {
+    signInAsTestUser();
+    renderSiteAt('/account');
+
+    expect(await screen.findByRole('heading', { name: 'Edit profile' })).toBeInTheDocument();
+    expect(screen.getByText('Test Collector', { selector: 'strong' })).toBeInTheDocument();
+    for (const removed of ['Authentication Method', 'Member Since', 'In Your Greenhouse']) {
+      expect(screen.queryByText(removed)).not.toBeInTheDocument();
+    }
+  });
+
+  it('saves a new name and preferred payment method, and checkout highlights it', async () => {
+    signInAsTestUser();
+    renderSiteAt('/account');
+
+    fireEvent.change(await screen.findByLabelText('Full name'), { target: { value: 'Renamed Collector' } });
+    fireEvent.change(screen.getByLabelText(/Preferred payment method/), { target: { value: 'apple_pay' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save profile' }));
+
+    expect(await screen.findByRole('status')).toHaveTextContent('Your profile is saved.');
+    expect(screen.getByRole('heading', { name: 'Welcome, Renamed Collector.' })).toBeInTheDocument();
+    expect(screen.getByLabelText(/Preferred payment method/)).toHaveValue('apple_pay');
+  });
+
+  it('refuses a mismatched or wrong password, then changes it', async () => {
+    signInAsTestUser();
+    renderSiteAt('/account');
+    const form = await screen.findByRole('form', { name: 'Change password' });
+    const fill = (current: string, next: string, confirm: string) => {
+      fireEvent.change(within(form).getByLabelText('Current password'), { target: { value: current } });
+      fireEvent.change(within(form).getByLabelText('New password'), { target: { value: next } });
+      fireEvent.change(within(form).getByLabelText('Confirm new password'), { target: { value: confirm } });
+      fireEvent.submit(form);
+    };
+
+    fill('test-password-1', 'brand-new-pass', 'different-pass');
+    expect(await within(form).findByRole('alert')).toHaveTextContent("The new passwords don't match.");
+
+    fill('wrong-password', 'brand-new-pass', 'brand-new-pass');
+    expect(await within(form).findByRole('alert')).toHaveTextContent('Your current password is incorrect.');
+
+    fill('test-password-1', 'brand-new-pass', 'brand-new-pass');
+    expect(await within(form).findByRole('status')).toHaveTextContent('Your password is changed.');
+    expect(within(form).getByLabelText('Current password')).toHaveValue('');
+  });
+
+  it('explains that Google-only accounts have no password to change', async () => {
+    signInMockUser({ email: 'google@example.test' }, 'google');
+    renderSiteAt('/account');
+
+    expect(await screen.findByText(/managed by your Google account/)).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: 'Change password' })).not.toBeInTheDocument();
   });
 });

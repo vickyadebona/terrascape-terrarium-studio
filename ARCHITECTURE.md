@@ -7,13 +7,21 @@ Welcome to the **TerraScape** codebase! This document outlines the application a
 ## 1. High-Level Overview
 
 **TerraScape** is a digital e-commerce and interactive specification platform for custom living botanical terrariums equipped with custom-engineered microclimate hardware:
-- **PWM Circadian LED Lighting:** Microcontroller-driven spectrum control mimicking natural sun & twilight cycles.
-- **Ultrasonic Piezo Misting:** High-frequency atomizing transducers producing ultra-fine micro-mist (1–5µm droplet diameter).
-- **Active Aeration:** Micro-ventilation fans providing continuous air exchange to prevent mold.
+- **Warm light:** 3000K warm white LED with an on/off button (no dimming, schedule or circadian mode).
+- **Mister:** one press mists for about 30 s from a 2 oz reservoir of distilled or purified water; it must never run dry. Say "mister", not "fog" or "fogger".
+- **Fan:** 5 V, on/off; keeps the glass clear so the scape stays visible.
+- **Power:** a UL-certified 5 V 2 A USB adapter ships in the box, with a white cord about 5.5 ft long.
+
+Source: Andrew's "Product Specifications 2026" doc (2026-11-10). The lineup (which units include the fan and mister) is still a Proposed decision.
 
 The application guides customers through a curated 4-step wizard (**01 Vessel & Lid** $\rightarrow$ **02 Foundation** $\rightarrow$ **03 Flora** $\rightarrow$ **04 Details**), pairs it with a dual **2D procedural cross-section stage** and an interactive **Three.js WebGL 3D showcase**, and manages cart, authentication, and living assembly order tracking.
 
 ---
+
+## Terminology
+- **Jar:** one terrarium, either a custom Studio build or an edition.
+- **Greenhouse:** the shopper's cart. It holds one or more jars, plus any accessories, until checkout. The code still calls it the cart (`CartContext`, `CartDrawer`).
+- **Order:** what a checkout creates from the greenhouse; it can contain several jars.
 
 ## 2. Directory & File Structure
 
@@ -21,20 +29,28 @@ The site runs on **Next.js 16 (App Router)**. Every URL is a folder under `src/a
 
 ```text
 next.config.ts                         # Redirects for old/alternative URLs (/home, /about, /build, /edition/:id, hyphenated editions)
-vercel.json                            # Tells Vercel this is a Next.js project
+vercel.json                            # Tells Vercel this is a Next.js project and to build with `npm run vercel-build` (migrate + seed + build)
 src/
 ├── app/                               # App Router: one folder per URL
 │   ├── layout.tsx                     # <html>/<body>, site-wide metadata (title template, description, Open Graph, icons), fonts
 │   ├── providers.tsx                  # Client providers (auth, cart, Studio) + site header/footer + global dialogs
 │   ├── not-found.tsx                  # 404 page (real 404 status, noindex)
+│   ├── api/auth/[...all]/route.ts     # Better Auth endpoints (sign-up, sign-in, sign-out, session, Google callback)
 │   ├── collections/ studio/ our-story/ terracare/ faq/ account/
 │   │   └── page.tsx                   # Exports the page's metadata and renders its view
 │   └── editions/[id]/page.tsx         # The three studio editions, prerendered; per-edition title and share image
 ├── site/
 │   ├── views.tsx                      # Page components (Collection, Studio builder, Our Story, TerraCare, FAQ, Account, not-found) and the route views
-│   ├── SiteShell.tsx                  # Header (nav, account/jar actions, mobile menu) and footer
+│   ├── SiteShell.tsx                  # Header (nav, account/greenhouse actions, mobile menu) and footer
 │   ├── StudioContext.tsx              # The Studio design in progress (selections, soil layers, step), kept in sessionStorage
 │   └── navigation.ts                  # useAppNavigate(): page names and aliases → canonical URLs via the Next.js router
+├── server/                            # Server-only code (never sent to the browser)
+│   ├── auth.ts                        # Better Auth config: email + password, Google, roles, rate limits
+│   ├── authFlags.ts                   # googleSignInEnabled (read by the layout)
+│   ├── db.ts                          # Prisma client, created on first query
+│   └── prismaAdapter.ts               # Neon driver for Neon, standard Postgres driver elsewhere (CI)
+├── lib/
+│   └── authClient.ts                  # Better Auth browser client
 ├── index.css                          # Global design tokens, official TerraScape branding palette
 ├── Terrarium2DLayeredView.tsx         # Procedural 2D cross-section SVG stage with custom soil slices
 ├── Terrarium3DShowcase.tsx            # Three.js WebGL 3D showcase with OrbitControls & mist particles (three is bundled from npm)
@@ -51,10 +67,11 @@ src/
 │   └── useDialogFocus.ts              # Focus, Tab and Escape handling for the dialogs
 ├── utils/
 │   ├── router.ts                      # Page names and URL aliases → canonical paths (used by useAppNavigate)
+│   ├── greenhouse.ts                  # greenhouseCountLabel(): "2 jars · 1 accessory"
 │   ├── stripeCheckoutEngine.ts        # Authoritative pricing validator & 5-stage order simulator
 │   └── soundEffects.ts                # Zero-asset Web Audio API procedural synthesizer
 ├── context/
-│   ├── AuthContext.tsx                # User session management with localStorage persistence
+│   ├── AuthContext.tsx                # useAuth(): session from Better Auth, sign-in/up/out, the sign-in dialog
 │   └── CartContext.tsx                # Global shopping cart, order storage & tracker state (restored after mount)
 ├── components/
 │   ├── CartDrawer.tsx                 # Slide-over cart drawer with itemized line items
@@ -138,11 +155,27 @@ Browser-only state (cart, orders, Studio design) starts empty on the server and 
 
 ### G. Development-Only Controls
 - No accounts are seeded and no form starts with personal, address or card data. Shoppers create their own account; checkout fills only the signed-in name and email.
-- These shortcuts render only when `import.meta.env.DEV` is true (supported by Next.js/Turbopack), so they are stripped from production builds:
-  - **Continue with Google** (simulated sign-in as a "Google Test User"; `signIn('google')` also refuses outside development)
+- These tools render only when `process.env.NODE_ENV !== "production"`. Next.js replaces that with a constant at build time, so they are removed from production bundles entirely (`import.meta.env.DEV` only hides them at runtime: it still ships the code):
   - **Auto-fill Stripe 4242 Test Card** in the checkout modal
   - **Simulate Next Stage** in the order tracker
-- Browsers that still hold the old seeded demo accounts have them, and any session for them, removed on load.
+  - the raw order and blueprint JSON (tracker) and blueprint JSON (greenhouse), for our team until the /admin page exists
+- Browsers that still hold the prototype's localStorage accounts or session have them removed on load.
+
+### H. Accounts & Sign-in (Better Auth)
+- Accounts, sessions and sign-in methods live in Postgres (`user`, `session`, `account`, `verification`, `rateLimit`). Passwords are hashed by Better Auth; the browser holds only an HTTP-only session cookie.
+- `useAuth()` keeps the same interface for the pages. `useSignedInAction()` waits for the session check after a page load, so signed-in shoppers aren't asked to sign in again.
+- **Google** appears only when `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` are set for the environment. It leaves the site and returns to the same page, so an "Add to Greenhouse" that prompted the sign-in has to be clicked again (the Studio design is kept).
+- `role` (CUSTOMER, STUDIO, ADMIN) can't be set at sign-up; our team's accounts are promoted in the database.
+- Requests are accepted only from our own hosts (`terrascape-*.vercel.app`, localhost); repeated attempts are rate-limited in production.
+- Env: `BETTER_AUTH_SECRET` (different per environment, required on Vercel), optional `BETTER_AUTH_URL`, `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET`. See `.env.example`.
+- The account page (`src/site/AccountSettings.tsx`) edits the name and preferred payment method, and changes the password (which signs out other devices). Google-only accounts have no password to change. Email changes wait for verification emails.
+- `preferredPaymentMethod` is only a preference (`src/catalog/paymentPreferences.ts`), validated on the server and marked at checkout. Card details are never stored; saved cards belong with Stripe.
+- Not yet: email verification and password reset (they need an email service).
+
+### I. Databases per Environment (Neon + Prisma)
+- **Production** uses the Neon `main` branch. **Preview deployments** (`dev`, `staging`, pull requests) each get their own Neon branch, created by the Vercel integration and copied from `main`. **Local development** uses the `development` branch through the git-ignored `.env.development.local`, which `next dev` and `prisma.config.ts` read before `.env.local`.
+- Vercel builds with `npm run vercel-build` (set in `vercel.json`): `prisma migrate deploy`, then `prisma db seed`, then `next build`. Every branch database therefore gets the latest tables and catalog before the site that uses it goes live. CI and local `npm run build` skip the database steps; CI's browser tests run against a throwaway Postgres container.
+- The seed upserts products by SKU, so running it on every deploy is safe. Once prices are edited in /admin, production should stop reseeding so the catalog code doesn't overwrite them.
 
 ---
 

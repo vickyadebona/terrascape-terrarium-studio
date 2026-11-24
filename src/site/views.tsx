@@ -1,12 +1,12 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import Terrarium3DShowcase from "../Terrarium3DShowcase";
 import Terrarium2DLayeredView from "../Terrarium2DLayeredView";
 import {
   ARRIVAL_GUARANTEE_DAYS,
   ASSEMBLY_FEE_CENTS,
-  FREE_SHIPPING_THRESHOLD_CENTS,
   SHIPPED_FEE_CENTS,
   STUDIO_REQUIRED_CATEGORIES,
   SOIL_CONTOUR_RANGE,
@@ -28,9 +28,10 @@ import { furthestReachableStep, isStudioStepComplete } from "../catalog/studioBl
 import { EditionDetailPage } from "../components/EditionDetailPage";
 import type { Page, EditionKey } from "../utils/router";
 import { STUDIO_EDITIONS, images, type StudioEdition } from "../catalog/editions";
+import { AccountSettings } from "./AccountSettings";
 import { useStudio } from "./StudioContext";
 import { useAppNavigate } from "./navigation";
-import { ADD_TO_JAR_PROMPT, useSignedInAction } from "./useSignedInAction";
+import { ADD_TO_GREENHOUSE_PROMPT, useSignedInAction } from "./useSignedInAction";
 
 type Category = StudioCategory;
 type Option = StudioOption;
@@ -199,7 +200,7 @@ function Home({
           </h2>
           <p>
             Each vessel is self-sustaining, pairing hand-layered woodland substrates with gentle
-            daylight and mist tucked quietly beneath its ceramic-finish lid.
+            light and mist tucked quietly beneath its lid.
           </p>
           <button className="text-arrow-link" onClick={() => navigate("terracare")}>
             Read our TerraCare guide <ArrowIcon />
@@ -252,7 +253,7 @@ function Builder({
   setSoilLayers,
   totalElements,
   subtotalCents,
-  onAddToJar,
+  onAddToGreenhouse,
   allowMultiQuantityFlora: controlledAllowMultiQuantityFlora,
 }: {
   activeCategory: Category;
@@ -264,8 +265,8 @@ function Builder({
   setSoilLayers: (layers: SoilLayerSpec[]) => void;
   totalElements: number;
   subtotalCents: number;
-  /** Adds the design to the jar; returns the required steps that are still empty. */
-  onAddToJar: () => Category[];
+  /** Adds the design to the greenhouse; returns the required steps that are still empty. */
+  onAddToGreenhouse: () => Category[];
   allowMultiQuantityFlora?: boolean;
 }) {
   const [soilDrawerOpen, setSoilDrawerOpen] = useState(false);
@@ -281,8 +282,8 @@ function Builder({
   // No soil in the preview until a foundation is chosen: the Studio starts as an empty jar.
   const hasFoundation = selected.some((id) => getStudioOption(id)?.category === "Foundation");
 
-  const handleAddToJar = () => {
-    setTriedToAdd(onAddToJar().length > 0);
+  const handleAddToGreenhouse = () => {
+    setTriedToAdd(onAddToGreenhouse().length > 0);
   };
   // Feature toggle: By default FALSE (multi-select flora with NO duplicate quantities).
   // Can be toggled on/off internally or passed via prop.
@@ -385,7 +386,7 @@ function Builder({
             <div className="smart-lid-banner-text">
               <strong>All-Inclusive Smart Climate Lid</strong>
               <p>
-                Every TerraScape vessel arrives complete with our team&apos;s custom circadian LED lighting, active ventilation fan, and ultrasonic misting manifold integrated directly into the lid collar ($0 / included).
+                Every TerraScape vessel arrives complete with a warm 3000K light, a quiet fan that keeps the glass clear, and a mister, each with its own on/off button, built into the lid ($0 / included).
               </p>
             </div>
           </div>
@@ -548,7 +549,7 @@ function Builder({
           <div className="builder-missing" role="alert">
             <p>
               Choose {listPhrases(missingSteps.map((category) => STEP_REQUIREMENT[category]))} before
-              adding your design to the jar.
+              adding your design to your greenhouse.
             </p>
             <div className="builder-missing-actions">
               {missingSteps.map((category) => (
@@ -568,9 +569,9 @@ function Builder({
         {step === categories.length && (
           <p className="builder-assembly-note">
             Courier and pickup orders are planted and assembled in our Los Angeles studio
-            (+{formatCents(ASSEMBLY_FEE_CENTS)} per build). Choose nationwide shipping in your jar to
+            (+{formatCents(ASSEMBLY_FEE_CENTS)} per build). Choose nationwide shipping in your greenhouse to
             receive it as a DIY kit instead.
-            {!isAuthenticated && " You'll sign in or create a free account to save your design to your jar."}
+            {!isAuthenticated && " You'll sign in or create a free account to save your design to your greenhouse."}
           </p>
         )}
 
@@ -591,18 +592,18 @@ function Builder({
           ) : (
             <button
               className="primary-button"
-              onClick={handleAddToJar}
+              onClick={handleAddToGreenhouse}
               disabled={!currentStepComplete}
               aria-describedby={currentStepComplete ? undefined : "builder-step-hint"}
             >
-              Add to Your Jar <ArrowIcon />
+              Add to Greenhouse <ArrowIcon />
             </button>
           )}
         </div>
         <p id="builder-step-hint" className="builder-step-hint" aria-live="polite">
           {currentStepComplete
             ? ""
-            : `Choose ${STEP_REQUIREMENT[activeCategory]} to ${step < categories.length ? "continue" : "add your design to the jar"}.`}
+            : `Choose ${STEP_REQUIREMENT[activeCategory]} to ${step < categories.length ? "continue" : "add your design to your greenhouse"}.`}
         </p>
       </div>
     </section>
@@ -723,12 +724,12 @@ function TerraCarePage({ navigate }: { navigate: (page: Page) => void }) {
           </article>
           <article className="step-card">
             <div className="step-card-body">
-              <span>Step 04 · Lid & USB-A Power</span>
+              <span>Step 04 · Lid & Power</span>
               <h3>Fill & Seat the Lid</h3>
               <p>
-                Open the small top hatch on the white lid, add distilled water to the fogger
-                reservoir, place the lid onto the jar rim, and plug in the attached white USB-A
-                cable.
+                Unscrew the mister&apos;s small water container, fill it with about 2 oz of
+                distilled or purified water and screw it back on. Then seat the lid on the jar rim
+                and plug the white cord into the USB power adapter from the box.
               </p>
             </div>
             <img
@@ -750,26 +751,26 @@ function TerraCarePage({ navigate }: { navigate: (page: Page) => void }) {
             <span>01</span>
             <h3>Water & Mist</h3>
             <p>
-              Always use <strong>distilled or rainwater</strong> (tap water leaves mineral spots on
-              the glass and moss). Run the fogger for 5–10 minutes every few days, or whenever the
-              moss feels slightly dry to the touch.
+              Always use <strong>distilled or purified water</strong> (tap water leaves mineral spots
+              on the glass and moss). One press of the mister gives about 30 seconds of mist; use it
+              every few days, or whenever the moss feels slightly dry. Never let the mister run dry.
             </p>
           </article>
           <article>
             <span>02</span>
             <h3>Reading the Glass</h3>
             <p>
-              A light veil of morning mist on the glass is a sign of a healthy water cycle. If
-              heavy droplets cover the entire jar all day, crack the lid or run the fan for an hour
-              to let excess moisture breathe.
+              A little condensation on the glass is a sign of a healthy water cycle. If heavy
+              droplets cover the jar, switch on the fan to clear the glass, or crack the lid to let
+              excess moisture breathe.
             </p>
           </article>
           <article>
             <span>03</span>
             <h3>Light & Pruning</h3>
             <p>
-              The built-in Halo LED provides all the light your plants need (8–10 hours a day is
-              ideal). If a fern frond grows tall enough to press against the lid, snip it cleanly
+              The built-in warm 3000K light provides all the light your plants need. Switch it on
+              for about 8–10 hours a day. If a fern frond grows tall enough to press against the lid, snip it cleanly
               at the base with small scissors.
             </p>
           </article>
@@ -811,11 +812,11 @@ const FAQ_SECTIONS = [
       },
       {
         q: "What is the difference between the Smooth Lid and the Ridged Lid?",
-        a: "Both lids are crafted in a warm matte-white finish and house the exact same under-lid light and fogger options. The Smooth Lid offers a quiet, minimalist cylinder silhouette, while the Ridged Lid features subtle diagonal fluting around the outer collar.",
+        a: "Both lids are crafted in a warm matte-white finish and house the exact same light, fan and mister. The Smooth Lid offers a quiet, minimalist cylinder silhouette, while the Ridged Lid features subtle diagonal fluting around the outer collar.",
       },
       {
         q: "How long does it take to build and ship my custom terrarium?",
-        a: `Studio builds are soldered, planted and rested for ${QUARANTINE_HOURS} hours in our Los Angeles, CA studio, then hand-delivered by our Southern California courier or ready for pickup in ${DELIVERY_OPTIONS.courier.leadBusinessDays.min}–${DELIVERY_OPTIONS.courier.leadBusinessDays.max} business days. Nationwide orders ship as DIY kits within ${DELIVERY_OPTIONS.shipped.leadBusinessDays.min}–${DELIVERY_OPTIONS.shipped.leadBusinessDays.max} business days; shipping is ${formatCents(SHIPPED_FEE_CENTS)}, free on orders over ${formatCents(FREE_SHIPPING_THRESHOLD_CENTS)}.`,
+        a: `Studio builds are assembled, planted and rested for ${QUARANTINE_HOURS} hours in our Los Angeles, CA studio, then hand-delivered by our Southern California courier or ready for pickup in ${DELIVERY_OPTIONS.courier.leadBusinessDays.min}–${DELIVERY_OPTIONS.courier.leadBusinessDays.max} business days. Nationwide orders ship as DIY kits within ${DELIVERY_OPTIONS.shipped.leadBusinessDays.min}–${DELIVERY_OPTIONS.shipped.leadBusinessDays.max} business days; shipping is ${formatCents(SHIPPED_FEE_CENTS)}.`,
       },
     ],
   },
@@ -824,19 +825,19 @@ const FAQ_SECTIONS = [
     items: [
       {
         q: "How is the terrarium lid powered?",
-        a: "The under-lid light and fogger unit is powered by an attached white USB-A cable that exits cleanly through the back of the lid collar. You can plug it into any standard 5V USB-A wall adapter, desktop port, or smart USB timer.",
+        a: "The lid runs on 5 V USB power. A UL-certified 5 V 2 A USB power adapter comes in the box, with a white cord about 5.5 ft long that exits cleanly through the back of the lid.",
       },
       {
         q: "How often do I need to water my terrarium?",
-        a: "Closed circular terrariums recycle their own moisture. Typically, running the built-in fogger for a few minutes once or twice a week—and refilling the top reservoir with distilled water every 3–4 weeks—is all that is needed.",
+        a: "Terrariums recycle much of their own moisture. Typically, one or two presses of the mister (about 30 seconds each) once or twice a week is all that is needed. Keep its 2 oz water container topped up; the mister must never run dry.",
       },
       {
-        q: "What kind of water should I use in the fogger reservoir?",
-        a: "We recommend distilled water or filtered rainwater. Hard tap water contains minerals that can cloud the glass over time and clog the ultrasonic misting disc.",
+        q: "What kind of water should I use in the mister?",
+        a: "Use distilled or purified water. Hard tap water contains minerals that can cloud the glass over time and clog the mister.",
       },
       {
-        q: "Does my terrarium need natural window light if it has the Halo LED?",
-        a: "No window is required! The warm full-spectrum Halo LED built into the under-lid unit provides everything your ferns, fittonia, and moss need, even in windowless offices or interior bookshelves.",
+        q: "Does my terrarium need natural window light?",
+        a: "No window is required. The warm 3000K light built into the lid provides everything your ferns, fittonia, and moss need, even in windowless offices or interior bookshelves. One button turns it on and off.",
       },
     ],
   },
@@ -939,6 +940,7 @@ function About({
   navigate: (page: Page) => void;
   selected: string[];
 }) {
+  const { isAuthenticated } = useAuth();
   return (
     <>
       <section className="about-hero">
@@ -981,8 +983,8 @@ function About({
             <em>inside and out.</em>
           </h1>
           <p className="lead">
-            Explore our circular apothecary vessel in 3D. Toggle the gentle canopy light and
-            fogger, then see how each piece is crafted and planted in our studio.
+            Explore our circular apothecary vessel in 3D. Toggle the warm light and
+            mister, then see how each piece is crafted and planted in our studio.
           </p>
           <div className="hero-cta-row">
             <button className="primary-button" onClick={() => navigate("build")}>
@@ -993,7 +995,7 @@ function About({
             <span>3D</span>
             <p>
               Use the <strong>3D</strong> and <strong>Studio</strong> tabs on the viewer to rotate
-              the vessel or toggle the <strong>Fogger</strong> and <strong>LED</strong>.
+              the vessel or toggle the <strong>Mister</strong> and <strong>Light</strong>.
             </p>
           </div>
         </div>
@@ -1002,7 +1004,7 @@ function About({
             selectedIds={selected}
             fallbackPhotoUrl={images.hero}
             captionTitle="Interactive 3D Vessel"
-            captionPrice="Rotate 360° · Toggle Fogger & LED"
+            captionPrice="Rotate 360° · Toggle Mister & Light"
           />
         </div>
       </section>
@@ -1024,7 +1026,7 @@ function About({
           <article className="step-card">
             <div className="step-card-body">
               <span>Stage 01 · Vessel & Lid</span>
-              <h3>Blown Glass & Collar</h3>
+              <h3>Glass Jar & Collar</h3>
               <p>
                 We start with a tall, clear circular glass jar and pair it with our custom-molded
                 matte-white lid—available in a clean smooth profile or a softly fluted ridge finish.
@@ -1033,7 +1035,7 @@ function About({
             <img
               className="step-card-img"
               src={images.jar}
-              alt="Stage 01 placeholder: Hand-blown circular glass jar and matte-white collar lid"
+              alt="Stage 01 placeholder: Circular glass jar and matte-white collar lid"
             />
           </article>
           <article className="step-card">
@@ -1041,14 +1043,14 @@ function About({
               <span>Stage 02 · Under the Lid</span>
               <h3>Quiet Light & Mist</h3>
               <p>
-                Nestled directly beneath the lid is a slim unit that houses a warm full-spectrum
-                grow light and a whisper-quiet fogger, powered by a clean white USB-A cable.
+                Nestled directly beneath the lid is a slim unit that houses a warm 3000K light, a
+                quiet fan and a mister, each with its own button, powered by a white USB cord.
               </p>
             </div>
             <img
               className="step-card-img"
               src={images.hero}
-              alt="Stage 02 placeholder: Under-lid warm LED light and ultrasonic fogger unit"
+              alt="Stage 02 placeholder: Under-lid warm light, fan and mister unit"
             />
           </article>
           <article className="step-card">
@@ -1114,21 +1116,45 @@ function About({
         </div>
       </section>
       <section className="signup-panel">
-        <div>
-          <p className="eyebrow">Join the studio</p>
-          <h2>
-            Save your worlds.
-            <br />
-            Watch them grow.
-          </h2>
-          <p>
-            Create an account to save designs, track orders, and receive care notes tailored to your
-            terrarium.
-          </p>
-          <button className="primary-button" onClick={() => navigate("account")}>
-            Create an account <ArrowIcon />
-          </button>
-        </div>
+        {/* Signed-in shoppers are sent on to the Studio; guests are invited to join or log in. */}
+        {isAuthenticated ? (
+          <div>
+            <p className="eyebrow">Welcome back</p>
+            <h2>
+              Your next world
+              <br />
+              starts here.
+            </h2>
+            <p>
+              Pick a vessel, layer the foundation, and plant it out in the Studio. Your designs, orders,
+              and care notes stay with your account.
+            </p>
+            <button className="primary-button" onClick={() => navigate("build")}>
+              Design in the Studio <ArrowIcon />
+            </button>
+          </div>
+        ) : (
+          <div>
+            <p className="eyebrow">Join the studio</p>
+            <h2>
+              Save your worlds.
+              <br />
+              Watch them grow.
+            </h2>
+            <p>
+              Create an account to save designs, track orders, and receive care notes tailored to your
+              terrarium.
+            </p>
+            <div className="signup-actions">
+              <button className="primary-button" onClick={() => navigate("account")}>
+                Create an account <ArrowIcon />
+              </button>
+              <Link href="/account?mode=login" className="text-button">
+                Already have one? <span className="underlined">Log in</span>
+              </Link>
+            </div>
+          </div>
+        )}
         <img src={images.fern} alt="Lush green fern in a terrarium" />
       </section>
     </>
@@ -1150,7 +1176,7 @@ function Account({
   onLogout: () => void;
 }) {
   const { openCart, itemCount, openTrackerModal, orders } = useCart();
-  const { signIn, isLoading } = useAuth();
+  const { signIn, isLoading, googleSignInEnabled } = useAuth();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   const handleGoogleSignIn = async () => {
@@ -1210,23 +1236,6 @@ function Account({
                 <span>Email Address</span>
                 <strong>{currentUser.email}</strong>
               </div>
-              <div className="account-profile-row">
-                <span>Authentication Method</span>
-                <strong style={{ color: "var(--ts-forest)", display: "inline-flex", alignItems: "center", gap: "0.4rem" }}>
-                  <span style={{ width: "8px", height: "8px", borderRadius: "50%", backgroundColor: "#34d399", display: "inline-block" }} />
-                  {currentUser.provider === "google" ? "Google OAuth Verified" : "Email & Password"}
-                </strong>
-              </div>
-              <div className="account-profile-row">
-                <span>Member Since</span>
-                <strong>
-                  {new Date(currentUser.createdAt).toLocaleDateString("en-US", { month: "long", year: "numeric" })}
-                </strong>
-              </div>
-              <div className="account-profile-row">
-                <span>Items in Your Jar</span>
-                <strong>{itemCount} build(s)</strong>
-              </div>
               {orders.length > 0 && (
                 <div className="account-profile-row">
                   <span>Active Assembly Orders</span>
@@ -1234,6 +1243,8 @@ function Account({
                 </div>
               )}
             </div>
+
+            <AccountSettings user={currentUser} />
 
             <div className="account-actions-row">
               {itemCount > 0 ? (
@@ -1243,7 +1254,7 @@ function Account({
                   onClick={openCart}
                   style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}
                 >
-                  Open Your Jar ({itemCount}) <ArrowIcon />
+                  Open Your Greenhouse ({itemCount}) <ArrowIcon />
                 </button>
               ) : (
                 <button
@@ -1313,12 +1324,12 @@ function Account({
           <h1>{mode === "signup" ? "Grow with us." : "Welcome back."}</h1>
           <p>
             {mode === "signup"
-              ? "Create an account to access Your Jar, save custom terrarium blueprints, and track living workshop orders."
-              : "Sign in to access Your Jar, view your saved terrarium designs, and track your builds."}
+              ? "Create an account to access Your Greenhouse, save custom terrarium blueprints, and track living workshop orders."
+              : "Sign in to access Your Greenhouse, view your saved terrarium designs, and track your builds."}
           </p>
 
-          {/* Google sign-in is simulated until Phase 3 auth, so it only shows in development builds. */}
-          {import.meta.env.DEV && (
+          {/* Shown once Google sign-in is configured for this environment. */}
+          {googleSignInEnabled && (
           <>
           <button
             type="button"
@@ -1462,7 +1473,7 @@ export function StudioView() {
       setSoilLayers={studio.setSoilLayers}
       totalElements={studio.totalElements}
       subtotalCents={studio.subtotalCents}
-      onAddToJar={studio.addStudioDesignToJar}
+      onAddToGreenhouse={studio.addStudioDesignToGreenhouse}
     />
   );
 }
@@ -1492,7 +1503,7 @@ export function EditionView({ id }: { id: EditionKey }) {
   const runSignedIn = useSignedInAction();
 
   // Adding to the jar needs an account; guests are asked to sign in first.
-  const addEditionToJar = (edition: StudioEdition) => {
+  const addEditionToGreenhouse = (edition: StudioEdition) => {
     runSignedIn(
       () =>
         addStandardItem({
@@ -1501,7 +1512,7 @@ export function EditionView({ id }: { id: EditionKey }) {
           sku: edition.sku,
           description: `${edition.vessel} · Includes live flora, stratified substrates & integrated smart lid`,
         }),
-      ADD_TO_JAR_PROMPT
+      ADD_TO_GREENHOUSE_PROMPT
     );
   };
 
@@ -1510,7 +1521,7 @@ export function EditionView({ id }: { id: EditionKey }) {
       edition={STUDIO_EDITIONS[id]}
       navigate={navigate}
       loadSignaturePreset={loadSignaturePreset}
-      addEditionToJar={addEditionToJar}
+      addEditionToGreenhouse={addEditionToGreenhouse}
     />
   );
 }

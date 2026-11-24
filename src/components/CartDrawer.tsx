@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { useCart } from '../context/CartContext';
 import { useAuth } from '../context/AuthContext';
+import { greenhouseCountLabel } from '../utils/greenhouse';
 import type { CartItem } from '../types/terrarium';
 import { ACCESSORY_PRODUCTS, ARRIVAL_GUARANTEE_DAYS } from '../catalog';
 import { formatCents, formatCentsExact } from '../catalog/money';
@@ -37,7 +38,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onLoadCustomBlueprintToS
     updateQuantity,
     shippingOption,
     setShippingOption,
-    itemCount,
     openCheckoutModal,
     addStandardItem,
   } = useCart();
@@ -89,7 +89,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onLoadCustomBlueprintToS
       className="fixed inset-0 z-50 overflow-hidden bg-[#18392b]/40 backdrop-blur-sm flex justify-end transition-opacity"
       role="dialog"
       aria-modal="true"
-      aria-label="Your Jar · Studio Cart"
+      aria-label="Your Greenhouse"
       ref={dialogRef}
       tabIndex={-1}
     >
@@ -106,13 +106,13 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onLoadCustomBlueprintToS
             </div>
             <div>
               <h2 className="text-xl font-normal font-serif text-[#18392b] flex items-center gap-2.5">
-                Your Jar
+                Your Greenhouse
                 <span className="px-2.5 py-0.5 rounded-full bg-[rgba(184,194,161,0.3)] text-[#18392b] text-xs border border-[rgba(24,57,43,0.18)] font-sans font-semibold">
-                  {itemCount} {itemCount === 1 ? 'item' : 'items'}
+                  {greenhouseCountLabel(items)}
                 </span>
               </h2>
               <p className="text-xs text-[#546358] mt-0.5">
-                Custom terrarium compositions &amp; integrated climate vessels
+                Your jars and accessories, held until checkout
               </p>
             </div>
           </div>
@@ -133,7 +133,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onLoadCustomBlueprintToS
                 <ShoppingBag className="w-7 h-7" />
               </div>
               <div className="space-y-1.5">
-                <h3 className="text-2xl font-normal font-serif text-[#18392b]">Your jar is currently empty</h3>
+                <h3 className="text-2xl font-normal font-serif text-[#18392b]">Your greenhouse is empty</h3>
                 <p className="text-xs text-[#546358] max-w-sm mx-auto leading-relaxed">
                   Design a miniature living world in our Studio, or begin with one of our curated studio editions.
                 </p>
@@ -197,14 +197,14 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onLoadCustomBlueprintToS
                 {/* Custom Blueprint Specs */}
                 {item.type === 'custom_blueprint' && (
                   <div className="space-y-2.5 pt-2 border-t border-[rgba(24,57,43,0.12)]">
-                    {/* Expandable Blueprint JSON & Re-load Actions */}
+                    {/* Expandable design details & Re-load Actions */}
                     <div className="flex items-center justify-between text-xs pt-0.5">
                       <button
                         onClick={() => toggleExpandBlueprint(item.id)}
                         className="text-[#546358] hover:text-[#18392b] flex items-center gap-1 transition cursor-pointer font-medium"
                       >
                         <FileCode2 className="w-3.5 h-3.5 text-[#18392b]" />
-                        <span>{expandedBlueprintId === item.id ? 'Hide Specs' : 'View Blueprint Specs'}</span>
+                        <span>{expandedBlueprintId === item.id ? 'Hide design details' : 'View design details'}</span>
                         {expandedBlueprintId === item.id ? (
                           <ChevronUp className="w-3.5 h-3.5" />
                         ) : (
@@ -225,11 +225,39 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onLoadCustomBlueprintToS
                       )}
                     </div>
 
-                    {/* Collapsible Blueprint Code View */}
+                    {/* Readable design details; the raw blueprint JSON is for our team, in development builds */}
                     {expandedBlueprintId === item.id && item.blueprint && (
-                      <pre className="bg-[#18392b] text-[#f8f5ee] border border-[#11291f] rounded-lg p-3 text-[10px] font-mono max-h-36 overflow-y-auto leading-relaxed">
-                        {JSON.stringify(item.blueprint, null, 2)}
-                      </pre>
+                      <>
+                        <dl className="bg-[#f8f5ee] border border-[rgba(24,57,43,0.14)] rounded-lg p-3 text-[11px] text-[#546358] space-y-1.5">
+                          <div className="flex gap-2">
+                            <dt className="font-semibold text-[#18392b] w-20 shrink-0">Vessel</dt>
+                            <dd>{item.blueprint.vessel.name}</dd>
+                          </div>
+                          <div className="flex gap-2">
+                            <dt className="font-semibold text-[#18392b] w-20 shrink-0">Foundation</dt>
+                            <dd>
+                              {item.blueprint.foundation.name}
+                              {item.blueprint.foundation.layers.length > 0 &&
+                                ` · ${item.blueprint.foundation.layers.map((layer) => layer.name).join(', ')}`}
+                            </dd>
+                          </div>
+                          <div className="flex gap-2">
+                            <dt className="font-semibold text-[#18392b] w-20 shrink-0">Plants &amp; details</dt>
+                            <dd>
+                              {item.blueprint.elements.length > 0
+                                ? item.blueprint.elements
+                                    .map((line) => (line.quantity > 1 ? `${line.name} ×${line.quantity}` : line.name))
+                                    .join(', ')
+                                : 'None'}
+                            </dd>
+                          </div>
+                        </dl>
+                        {process.env.NODE_ENV !== "production" && (
+                          <pre className="bg-[#18392b] text-[#f8f5ee] border border-[#11291f] rounded-lg p-3 text-[10px] font-mono max-h-36 overflow-y-auto leading-relaxed">
+                            {JSON.stringify(item.blueprint, null, 2)}
+                          </pre>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -280,18 +308,6 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onLoadCustomBlueprintToS
             ))
           )}
 
-          {items.length > 0 && (
-            <div className="rounded-xl bg-[#f0ede3] border border-[rgba(24,57,43,0.14)] p-3.5">
-              <DeliveryOptionPicker
-                name="cart-delivery"
-                value={shippingOption}
-                onChange={setShippingOption}
-                subtotalCents={estimate.subtotalCents}
-                customBuildCount={customBuildCount}
-              />
-            </div>
-          )}
-
           {/* Quick-Add Accessories Bar */}
           {items.length > 0 && (
             <div className="rounded-xl bg-[rgba(184,194,161,0.18)] border border-[rgba(24,57,43,0.16)] p-3.5 space-y-2.5">
@@ -311,6 +327,17 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onLoadCustomBlueprintToS
               </div>
             </div>
           )}
+
+          {items.length > 0 && (
+            <div className="rounded-xl bg-[#f0ede3] border border-[rgba(24,57,43,0.14)] p-3.5">
+              <DeliveryOptionPicker
+                name="cart-delivery"
+                value={shippingOption}
+                onChange={setShippingOption}
+                customBuildCount={customBuildCount}
+              />
+            </div>
+          )}
         </div>
 
         {/* Footer Checkout Summary */}
@@ -318,7 +345,7 @@ export const CartDrawer: React.FC<CartDrawerProps> = ({ onLoadCustomBlueprintToS
           <div className="p-5 border-t border-[rgba(24,57,43,0.14)] bg-[#f0ede3] space-y-3.5 shrink-0">
             <div className="space-y-1.5 text-xs text-[#546358]">
               <div className="flex justify-between">
-                <span>Subtotal ({itemCount} {itemCount === 1 ? 'item' : 'items'})</span>
+                <span>Subtotal ({greenhouseCountLabel(items)})</span>
                 <span className="font-sans text-[#18392b] font-bold">
                   {formatCentsExact(estimate.subtotalCents)}
                 </span>

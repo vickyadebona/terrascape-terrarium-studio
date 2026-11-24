@@ -26,8 +26,8 @@ export const SINGLE_CHOICE_CATEGORIES: StudioCategory[] = ['Vessel', 'Foundation
 
 /**
  * Studio steps that need at least one selection before the shopper can continue to the next
- * step or add the design to the jar. Details is optional. Add or remove a step here to change
- * the rule everywhere (Studio buttons, the jar check and the "From" price).
+ * step or add the design to the greenhouse. Details is optional. Add or remove a step here to change
+ * the rule everywhere (Studio buttons, the greenhouse check and the "From" price).
  */
 export const STUDIO_REQUIRED_CATEGORIES: StudioCategory[] = ['Vessel', 'Foundation', 'Flora'];
 
@@ -61,7 +61,7 @@ export const STUDIO_OPTIONS: StudioOption[] = [
     id: 'jar_smooth',
     sku: 'VSL-CIR-SM',
     name: 'Tall Apothecary Jar · Smooth Lid',
-    note: 'Hand-blown circular glass · Integrated LED, fan & ultrasonic mist lid · 14 in',
+    note: 'Circular glass jar · Lid with built-in warm light, fan & mister',
     priceCents: 8400,
     category: 'Vessel',
   }),
@@ -69,7 +69,7 @@ export const STUDIO_OPTIONS: StudioOption[] = [
     id: 'jar_ridged',
     sku: 'VSL-CIR-RG',
     name: 'Tall Apothecary Jar · Ridged Lid',
-    note: 'Hand-blown circular glass · Fluted collar with integrated LED, fan & mist · 14 in',
+    note: 'Circular glass jar · Fluted lid with built-in warm light, fan & mister',
     priceCents: 9200,
     category: 'Vessel',
   }),
@@ -224,11 +224,12 @@ export const ACCESSORY_PRODUCTS = {
   },
 } satisfies Record<string, Product>;
 
-/** Hand-planting and soldering in the LA studio, per custom build. */
+/** Hand-planting and lid assembly in the LA studio, per custom build. */
 export const ASSEMBLY_FEE_CENTS = 2500;
+// Placeholder fee until the team confirms real shipping costs.
 export const COURIER_FEE_CENTS = 1800;
-export const SHIPPED_FEE_CENTS = 1800;
-export const FREE_SHIPPING_THRESHOLD_CENTS = 15000;
+/** Getting an order to the shopper's door costs the same by courier or nationwide. */
+export const SHIPPED_FEE_CENTS = COURIER_FEE_CENTS;
 /** Estimated CA sales tax until Stripe Tax computes it server-side. */
 export const ESTIMATED_TAX_RATE = 0.095;
 

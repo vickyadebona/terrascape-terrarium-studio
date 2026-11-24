@@ -1,24 +1,25 @@
 import { test, expect, type Page } from '@playwright/test';
 
+/** A new address for every run: accounts live in the database, so each test signs up afresh. */
+const uniqueEmail = (label: string) =>
+  `${label}+${Date.now()}-${Math.random().toString(36).slice(2, 8)}@example.test`;
+
 async function freshStart(page: Page, path: string, { signedIn = false } = {}) {
   await page.goto(path);
-  await page.evaluate((signedIn) => {
+  await page.evaluate(() => {
     localStorage.clear();
     sessionStorage.clear();
-    if (signedIn) {
-      // A returning shopper's saved session (local test account).
-      localStorage.setItem(
-        'terrascape_auth_session_v1',
-        JSON.stringify({
-          id: 'usr_1700000000000_e2e',
-          name: 'E2E Collector',
-          email: 'e2e@example.test',
-          provider: 'credentials',
-          createdAt: '2026-10-01T00:00:00.000Z',
-        })
-      );
-    }
-  }, signedIn);
+  });
+  if (signedIn) {
+    // A returning shopper: create an account through the auth API. The session cookie it sets
+    // is shared with the page.
+    const origin = new URL(page.url()).origin;
+    const response = await page.request.post('/api/auth/sign-up/email', {
+      headers: { origin },
+      data: { name: 'E2E Collector', email: uniqueEmail('e2e'), password: 'e2e-test-password' },
+    });
+    expect(response.ok()).toBe(true);
+  }
   await page.goto(path);
 }
 
@@ -30,7 +31,7 @@ async function designSmoothJarWithFern(page: Page) {
   await page.getByRole('checkbox', { name: /Button Fern/ }).click();
   await page.getByRole('button', { name: /04\s*Details/ }).click();
   await page.getByRole('checkbox', { name: /River Stone/ }).click();
-  await page.getByRole('button', { name: /Add to Your Jar/ }).click();
+  await page.getByRole('button', { name: /Add to Greenhouse/ }).click();
 }
 
 const mainNav = (page: Page) => page.getByRole('navigation', { name: 'Main navigation' });
@@ -85,27 +86,27 @@ test.describe('TerraScape smoke suite', () => {
     await expect(page.locator('.faq-question-btn[aria-expanded="true"]')).toHaveCount(0);
   });
 
-  test('a guest designs, signs up, and the design lands in the jar once', async ({ page }) => {
+  test('a guest designs, signs up, and the design lands in the greenhouse once', async ({ page }) => {
     await freshStart(page, '/studio');
-    await expect(page.getByRole('button', { name: /Your Jar/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /^Greenhouse/ })).toHaveCount(0);
 
     await designSmoothJarWithFern(page);
-    const signIn = page.getByRole('dialog', { name: 'Sign in to save it to your jar' });
+    const signIn = page.getByRole('dialog', { name: 'Sign in to save it to your greenhouse' });
     await signIn.getByLabel('Full Name').fill('E2E Guest');
-    await signIn.getByLabel('Email Address').fill('guest@example.test');
+    await signIn.getByLabel('Email Address').fill(uniqueEmail('guest'));
     await signIn.getByLabel('Password').fill('e2e-test-password');
-    await signIn.getByRole('button', { name: /Create Account & Add to Your Jar/ }).click();
+    await signIn.getByRole('button', { name: /Create Account & Add to Greenhouse/ }).click();
 
-    const jar = page.getByRole('dialog', { name: /Your Jar/ });
+    const jar = page.getByRole('dialog', { name: /Your Greenhouse/ });
     await expect(jar.getByText('Custom Tall Apothecary Jar · Smooth Lid')).toHaveCount(1);
-    await expect(page.getByRole('button', { name: /Your Jar\s*1/ })).toBeVisible();
+    await expect(page.getByRole('button', { name: /^Greenhouse\s*1/ })).toBeVisible();
   });
 
-  test('a Studio design goes into the jar at catalog prices', async ({ page }) => {
+  test('a Studio design goes into the greenhouse at catalog prices', async ({ page }) => {
     await freshStart(page, '/studio', { signedIn: true });
     await designSmoothJarWithFern(page);
 
-    const jar = page.getByRole('dialog', { name: /Your Jar/ });
+    const jar = page.getByRole('dialog', { name: /Your Greenhouse/ });
     await expect(jar).toBeVisible();
     // $135 design + $25 studio assembly + $18 courier + $16.91 tax
     await expect(jar.getByText('$194.91 USD')).toBeVisible();
@@ -120,10 +121,29 @@ test.describe('TerraScape smoke suite', () => {
 
   test('studio editions are limited to one per order', async ({ page }) => {
     await freshStart(page, '/editions/moss_garden', { signedIn: true });
-    await page.getByRole('button', { name: /Add to Your Jar/ }).first().click();
+    await page.getByRole('button', { name: /Add to Greenhouse/ }).first().click();
 
-    const jar = page.getByRole('dialog', { name: /Your Jar/ });
+    const jar = page.getByRole('dialog', { name: /Your Greenhouse/ });
     await expect(jar.getByRole('button', { name: 'Increase quantity (limit reached)' })).toBeDisabled();
+  });
+
+  test('the page behind an open dialog does not scroll', async ({ page }) => {
+    await freshStart(page, '/editions/moss_garden', { signedIn: true });
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+    await page.getByRole('button', { name: /Add to Greenhouse/ }).first().click();
+    await expect(page.getByRole('dialog', { name: /Your Greenhouse/ })).toBeVisible();
+    const before = await page.evaluate(() => window.scrollY);
+    // Scroll over the blurred backdrop, left of the greenhouse panel.
+    await page.mouse.move(40, 400);
+    await page.mouse.wheel(0, 800);
+    await page.waitForTimeout(300);
+    expect(await page.evaluate(() => window.scrollY)).toBe(before);
+
+    await page.keyboard.press('Escape');
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
   });
 
   test('unknown links show the not-found page with a 404 status', async ({ page }) => {

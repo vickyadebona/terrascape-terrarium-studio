@@ -1,4 +1,8 @@
+"use client";
+
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import { authClient } from '../lib/authClient';
+import { isPaymentPreference } from '../catalog/paymentPreferences';
 import type {
   AuthProviderType,
   User,
@@ -7,62 +11,93 @@ import type {
   AuthModalConfig,
 } from '../types/auth';
 
-const SESSION_STORAGE_KEY = 'terrascape_auth_session_v1';
-const USERS_STORAGE_KEY = 'terrascape_registered_users_v1';
+// The prototype kept accounts (with plain-text passwords) and the signed-in user in
+// localStorage. Accounts now live in the database, so remove those keys from any browser
+// that still has them.
+const LEGACY_STORAGE_KEYS = ['terrascape_auth_session_v1', 'terrascape_registered_users_v1'];
 
-// The old demo build seeded accounts with a shared password and fixed ids made only of
-// letters (e.g. "usr_demo_account"). Real ids always include a timestamp, so any id
-// without a digit is a seeded account: remove it from browsers that still have one.
-const isLegacySeededUserId = (id: unknown): boolean =>
-  typeof id === 'string' && id.startsWith('usr_') && !/\d/.test(id);
+type AuthErrorLike = { code?: string; status?: number; message?: string } | null | undefined;
 
-type StoredAccount = { user: User; passwordHash: string };
-
-function readStoredAccounts(): StoredAccount[] {
-  const raw = localStorage.getItem(USERS_STORAGE_KEY);
-  const parsed: unknown = raw ? JSON.parse(raw) : [];
-  return Array.isArray(parsed) ? (parsed as StoredAccount[]) : [];
+/** Turns Better Auth's error codes into the messages shoppers see. */
+function describeAuthError(error: AuthErrorLike, fallback: string): string {
+  if (error?.status === 429) return 'Too many attempts. Please wait a minute and try again.';
+  switch (error?.code) {
+    case 'USER_ALREADY_EXISTS':
+    case 'USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL':
+      return 'An account with this email already exists. Please sign in.';
+    case 'INVALID_EMAIL_OR_PASSWORD':
+      return 'Invalid email or password';
+    case 'INVALID_PASSWORD':
+      return 'Your current password is incorrect.';
+    case 'PASSWORD_TOO_SHORT':
+      return 'Use at least 8 characters for your password.';
+    case 'INVALID_EMAIL':
+      return 'Please enter a valid email address.';
+    default:
+      return error?.message || fallback;
+  }
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
+export const AuthProvider: React.FC<{ children: React.ReactNode; googleSignInEnabled?: boolean }> = ({
+  children,
+  googleSignInEnabled = false,
+}) => {
+  const { data: sessionData, isPending } = authClient.useSession();
+  const [isBusy, setIsBusy] = useState(false);
   const [isAuthModalOpen, setIsAuthModalOpen] = useState<boolean>(false);
   const [authModalConfig, setAuthModalConfig] = useState<AuthModalConfig | null>(null);
+  // How the signed-in shopper signs in (decides the account page's password section), looked up per user.
+  const [signInMethod, setSignInMethod] = useState<{
+    userId: string;
+    provider: AuthProviderType;
+    hasPassword: boolean;
+  } | null>(null);
 
-  // Drop the legacy seeded demo accounts if this browser still has them
   useEffect(() => {
     try {
-      const accounts = readStoredAccounts();
-      const kept = accounts.filter((account) => !isLegacySeededUserId(account.user?.id));
-      if (kept.length !== accounts.length) {
-        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(kept));
-      }
-    } catch (e) {
-      console.warn('Unable to clean up registered users cache', e);
+      for (const key of LEGACY_STORAGE_KEYS) localStorage.removeItem(key);
+    } catch {
+      // Storage unavailable: nothing to clean up.
     }
   }, []);
 
-  // Restore active session on mount
+  const sessionUser = sessionData?.user ?? null;
+  const userId = sessionUser?.id ?? null;
+
   useEffect(() => {
-    try {
-      const savedSession = localStorage.getItem(SESSION_STORAGE_KEY);
-      if (savedSession) {
-        const parsed = JSON.parse(savedSession) as User;
-        if (isLegacySeededUserId(parsed?.id)) {
-          localStorage.removeItem(SESSION_STORAGE_KEY);
-        } else {
-          setUser(parsed);
-        }
+    if (!userId) return;
+    let cancelled = false;
+    authClient.listAccounts().then(({ data }) => {
+      if (cancelled || !data) return;
+      const provider = data.some((account) => account.providerId === 'google') ? 'google' : 'credentials';
+      const hasPassword = data.some((account) => account.providerId === 'credential');
+      setSignInMethod({ userId, provider, hasPassword });
+    }).catch(() => {
+      // Not critical: the account page leaves out the password section.
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+
+  const user: User | null = sessionUser
+    ? {
+        id: sessionUser.id,
+        name: sessionUser.name,
+        email: sessionUser.email,
+        avatarUrl: sessionUser.image ?? undefined,
+        provider: signInMethod?.userId === sessionUser.id ? signInMethod.provider : 'credentials',
+        createdAt: new Date(sessionUser.createdAt).toISOString(),
+        hasPassword: signInMethod?.userId === sessionUser.id ? signInMethod.hasPassword : undefined,
+        preferredPaymentMethod: isPaymentPreference(sessionUser.preferredPaymentMethod)
+          ? sessionUser.preferredPaymentMethod
+          : null,
       }
-    } catch (e) {
-      console.warn('Unable to restore auth session', e);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
+    : null;
+
+  const isLoading = isPending || isBusy;
 
   const openAuthModal = useCallback((config?: AuthModalConfig) => {
     setAuthModalConfig(config || null);
@@ -84,118 +119,96 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isSignUp?: boolean;
       }
     ): Promise<{ ok: boolean; error?: string }> => {
-      setIsLoading(true);
-
-      // Simulate realistic network round-trip
-      await new Promise((resolve) => setTimeout(resolve, 600));
-
+      setIsBusy(true);
       try {
-        let authenticatedUser: User;
-
         if (provider === 'google') {
-          // Google sign-in is simulated until Phase 3 auth, so it only exists in development builds.
-          if (!import.meta.env.DEV) {
-            setIsLoading(false);
+          if (!googleSignInEnabled) {
             return { ok: false, error: 'Google sign-in is not available yet. Please use email instead.' };
           }
-          authenticatedUser = {
-            id: `usr_g_${Date.now()}`,
-            name: credentials?.name || 'Google Test User',
-            email: credentials?.email || 'google.tester@example.test',
+          // Leaves the site for Google and comes back to this page signed in.
+          const { error } = await authClient.signIn.social({
             provider: 'google',
-            createdAt: new Date().toISOString(),
-          };
-        } else {
-          // Credentials Provider (Email + Password)
-          const email = credentials?.email?.trim().toLowerCase();
-          const password = credentials?.password || '';
-          const name = credentials?.name?.trim();
-
-          if (!email || !password) {
-            setIsLoading(false);
-            return { ok: false, error: 'Email and password are required' };
-          }
-
-          const usersList = readStoredAccounts().filter(
-            (account) => !isLegacySeededUserId(account.user?.id)
-          );
-
-          if (credentials?.isSignUp) {
-            if (password.length < 8) {
-              setIsLoading(false);
-              return { ok: false, error: 'Use at least 8 characters for your password.' };
-            }
-            const exists = usersList.find((u) => u.user.email.toLowerCase() === email);
-            if (exists) {
-              setIsLoading(false);
-              return { ok: false, error: 'An account with this email already exists. Please sign in.' };
-            }
-
-            authenticatedUser = {
-              id: `usr_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-              name: name || email.split('@')[0],
-              email,
-              provider: 'credentials',
-              createdAt: new Date().toISOString(),
-            };
-
-            usersList.push({
-              user: authenticatedUser,
-              passwordHash: password,
-            });
-
-            localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(usersList));
-          } else {
-            const found = usersList.find(
-              (u) => u.user.email.toLowerCase() === email && u.passwordHash === password
-            );
-
-            if (!found) {
-              setIsLoading(false);
-              return { ok: false, error: 'Invalid email or password' };
-            }
-
-            authenticatedUser = found.user;
-          }
+            callbackURL: window.location.pathname + window.location.search,
+          });
+          if (error) return { ok: false, error: describeAuthError(error, 'Google sign-in failed') };
+          return { ok: true };
         }
 
-        // Commit active session
-        setUser(authenticatedUser);
-        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(authenticatedUser));
-        setIsLoading(false);
+        const email = credentials?.email?.trim().toLowerCase();
+        const password = credentials?.password || '';
+        if (!email || !password) {
+          return { ok: false, error: 'Email and password are required' };
+        }
 
-        // If an intercept callback was registered, execute it immediately
+        if (credentials?.isSignUp) {
+          if (password.length < 8) {
+            return { ok: false, error: 'Use at least 8 characters for your password.' };
+          }
+          const { error } = await authClient.signUp.email({
+            email,
+            password,
+            name: credentials.name?.trim() || email.split('@')[0],
+          });
+          if (error) return { ok: false, error: describeAuthError(error, 'Sign up failed') };
+        } else {
+          const { error } = await authClient.signIn.email({ email, password });
+          if (error) return { ok: false, error: describeAuthError(error, 'Invalid email or password') };
+        }
+
+        // If an intercept callback was registered, run it once the dialog has closed.
         const callback = authModalConfig?.onAuthenticated;
         closeAuthModal();
-
-        if (callback) {
-          // Slight defer to allow modal state transition to resolve cleanly
-          setTimeout(() => {
-            callback();
-          }, 100);
-        }
+        if (callback) setTimeout(callback, 100);
 
         return { ok: true };
       } catch (err) {
-        setIsLoading(false);
         return { ok: false, error: err instanceof Error ? err.message : 'Authentication failed' };
+      } finally {
+        setIsBusy(false);
       }
     },
-    [authModalConfig, closeAuthModal]
+    [authModalConfig, closeAuthModal, googleSignInEnabled]
   );
 
   const signOut = useCallback(async () => {
-    setIsLoading(true);
-    await new Promise((resolve) => setTimeout(resolve, 300));
-    setUser(null);
-    localStorage.removeItem(SESSION_STORAGE_KEY);
-    setIsLoading(false);
+    setIsBusy(true);
+    try {
+      await authClient.signOut();
+    } finally {
+      setIsBusy(false);
+    }
+  }, []);
+
+  const updateProfile = useCallback<AuthContextType['updateProfile']>(async ({ name, preferredPaymentMethod }) => {
+    const trimmed = name.trim();
+    if (!trimmed) return { ok: false, error: 'Please enter your name.' };
+    try {
+      const { error } = await authClient.updateUser({ name: trimmed, preferredPaymentMethod });
+      if (error) return { ok: false, error: describeAuthError(error, 'Your profile could not be saved.') };
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Your profile could not be saved.' };
+    }
+  }, []);
+
+  const changePassword = useCallback<AuthContextType['changePassword']>(async (currentPassword, newPassword) => {
+    if (newPassword.length < 8) return { ok: false, error: 'Use at least 8 characters for your password.' };
+    try {
+      // Signs out any other device, in case the old password was the problem.
+      const { error } = await authClient.changePassword({ currentPassword, newPassword, revokeOtherSessions: true });
+      if (error) return { ok: false, error: describeAuthError(error, 'Your password could not be changed.') };
+      return { ok: true };
+    } catch {
+      return { ok: false, error: 'Your password could not be changed.' };
+    }
   }, []);
 
   const session: Session = {
     user,
-    status: isLoading ? 'loading' : user ? 'authenticated' : 'unauthenticated',
-    expires: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+    status: isPending ? 'loading' : user ? 'authenticated' : 'unauthenticated',
+    expires: sessionData?.session.expiresAt
+      ? new Date(sessionData.session.expiresAt).toISOString()
+      : undefined,
   };
 
   return (
@@ -207,6 +220,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isLoading,
         signIn,
         signOut,
+        updateProfile,
+        changePassword,
+        googleSignInEnabled,
         isAuthModalOpen,
         authModalConfig,
         openAuthModal,
